@@ -36,8 +36,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 
-uri = "mongodb+srv://discordBot:shashwat@discord.s1a5cmt.mongodb.net/?retryWrites=true&w=majority"
-token = "MTE4MTI1Mzc4ODI5MjYzMjYxOA.GASiNO.BhNlwdk9ThC1gpebom3zL5u4HAkOhLp0QZjtxw"
+uri = "uri"
+token = "token"
 
 try:
     cluster = MongoClient(uri)
