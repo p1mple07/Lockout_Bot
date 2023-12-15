@@ -36,8 +36,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 
-uri = "uri"
-token = "token"
+uri = "mongodb+srv://discordBot:shashwat@discord.s1a5cmt.mongodb.net/?retryWrites=true&w=majority"
+token = "MTE4MTI1Mzc4ODI5MjYzMjYxOA.GASiNO.BhNlwdk9ThC1gpebom3zL5u4HAkOhLp0QZjtxw"
 
 try:
     cluster = MongoClient(uri)
@@ -83,6 +83,7 @@ class AcWeb:
 db = cluster['discord-bot']
 servers = db['servers']
 participantsList = db['participantsList']
+teamParticipantsList = db['teamParticipantsList']
 tourney_status = db['tourney_status']
 storage = db['storage']
 current_round = db['current_round']
@@ -100,9 +101,11 @@ async def help(ctx):
         color=0x3cddbc)
 
     embed.add_field(name="!registerMe <cf_handle>", value="To register your codeforces handles"+"\n\u200b", inline=False)
+    embed.add_field(name="!registerMeInTeam <cf_handle> <Team_name>", value="To register your codeforces handles in team"+"\n\u200b", inline=False)
     embed.add_field(name="!ac_registerMe <ac_handle>", value="To register your atcoder handles"+"\n\u200b", inline=False)
     embed.add_field(name="!unregisterMe", value="To unregister yourself from the tournament"+"\n\u200b", inline=False)
     embed.add_field(name="!showParticipants", value="To display the participants"+"\n\u200b", inline=False)
+    embed.add_field(name="!showTeamParticipants", value="To display the team participants"+"\n\u200b", inline=False)
     embed.add_field(name="!showMatches", value="Shows all the matches in the current round"+"\n\u200b", inline=False)
     embed.add_field(name="!show", value="Shows the current round number"+"\n\u200b", inline=False)
     embed.add_field(name="!roundStatus <roundnumber>", value="Shows the status of the current round"+"\n\u200b", inline=False)
@@ -147,6 +150,7 @@ async def managerHelp(ctx):
 
     embed.add_field(name="!channel <channel name>", value="To change the channel of tourney manager"+"\n\u200b", inline=False)
     embed.add_field(name="!startRegister <channel name> <tourneyname>", value="To register a tournament with a channel"+"\n\u200b", inline=False)
+    embed.add_field(name="!startTeamRegister <channel name> <tourneyname>", value="To register a team tournament with a channel"+"\n\u200b", inline=False)
     embed.add_field(name="!matchChannel <channel name> <tourneyname>", value="To register a channel for match"+"\n\u200b", inline=False)
     embed.add_field(name="!unRegMatchChannel <channel name>", value="To unregister a channel for match"+"\n\u200b", inline=False)
     embed.add_field(name="!startTourney <tourneyname>", value="Start a tournament"+"\n\u200b", inline=False)
@@ -821,6 +825,8 @@ async def on_guild_join(guild):
         current_matches.insert_one({"server": guild.id,
                                     "matches": {}})
         participantsList.insert_one({"server": guild.id,
+                                    "contestants": {}})
+        teamParticipantsList.insert_one({"server": guild.id,
                                     "contestants": {}})
         storage.insert_one({"server": guild.id,
                             "storage": {}})            
@@ -2505,5 +2511,291 @@ async def get_user(ctx,handle = '--'):
         )
         await ctx.send(embed = embed)
         return
+    
+#Starts the registrations for a tournament
+@client.command()
+@commands.has_role('Tourney-manager')
+async def startTeamRegister(ctx, text_channel: discord.TextChannel, tourneyName = "--"):
+    thisServer = servers.find_one({"_id": ctx.guild.id})
+    text_channel_n = thisServer["text_channel"]
+    global home_channel
+    for x in ctx.guild.text_channels:
+        if x.id == text_channel_n:
+            home_channel = x
+
+    if(ctx.channel.id != text_channel_n):
+        embed = discord.Embed(
+            title="Bot not registered in this channel !",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+
+    if(tourneyName == "--"):
+        embed = discord.Embed(
+            title="Invalid command! :x:",
+            description="please specify tournament name",
+            color=discord.Color.red()
+        )
+        await home_channel.send(embed=embed)
+        return
+
+    flag = False
+    tournaments =  servers.find_one({"_id": ctx.guild.id})['tournaments']
+    for tournament in tournaments:
+        if(tournaments[tournament]['text_channel'] == text_channel.id):
+            embed = discord.Embed(
+                title="Tournament already running in given channel !",
+                description="you can start a new tournament only after current one ends",
+                color=discord.Color.red()
+            )
+            await home_channel.send(embed=embed)
+            return
+        
+        if(tournament == tourneyName):
+            flag = True
+
+    if(flag):
+        embed = discord.Embed(
+            title="Tournament name should be unique !",
+            description="there exists a tournament with the same name so please try again with a new name",
+            color=discord.Color.red()
+        )
+        await home_channel.send(embed=embed)
+        return
+
+    tournaments[tourneyName] = {
+        "text_channel": text_channel.id,
+        "tourney_status": False,
+        "current_round": None,
+        "match_channels": []
+    }
+
+    servers.update_one({"_id": ctx.guild.id}, {
+                        "$set": {"tournaments": tournaments}})
+
+
+    parts_ = teamParticipantsList.find_one({"server": ctx.guild.id})['contestants']
+    parts_[tourneyName] = []
+    teamParticipantsList.update_one({"server": ctx.guild.id},
+                                {"$set": {'contestants': parts_}})
+
+    current_ = current_matches.find_one({"server": ctx.guild.id})['matches']
+    current_[tourneyName] = []
+    current_matches.update_one({"server": ctx.guild.id},
+                                {"$set": {'matches': current_}})
+    
+    storage_ = storage.find_one({"server": ctx.guild.id})['storage']
+    storage_[tourneyName] = []
+    storage.update_one({"server": ctx.guild.id},
+                        {"$set": {'storage': storage_}})
+
+    embed = discord.Embed(
+        title="Tournament Started :crossed_swords:",
+        description=f"Participants can register their cf account with **!registerMe <cf_handle>** and ac account with **!ac_registerMe <ac_handle>**",
+        color=discord.Color.gold()
+    )
+
+    embed2 = discord.Embed(
+        title=f"Tournament **{tourneyName}** started :crossed_swords:",
+        color=discord.Color.gold()
+    )
+
+    embed.set_author(name=botName)
+    await text_channel.send(embed=embed)
+    await home_channel.send(embed=embed2)
+
+#Participants can register using this command
+@client.command()
+async def registerMeInTeam(ctx, cf_handle="--",teamName = "--"):
+
+    thisServer = servers.find_one({"_id": ctx.guild.id})
+    # global text_channel
+    for x in ctx.guild.text_channels:
+        if x.id == ctx.channel.id:
+            text_channel = x
+
+    global tourneyName
+    tourneyName = None
+    for tournament in thisServer['tournaments']:
+        if(thisServer['tournaments'][tournament]['text_channel'] == text_channel.id):
+            tourneyName = tournament
+
+    if tourneyName == None:
+        embed = discord.Embed(
+            title="No Tourney",
+            description=f"{ctx.author.mention} there is no ongoing tournament in this channel",
+            color=discord.Color.gold()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    if(cf_handle == "--"):
+        embed = discord.Embed(
+            title="Invalid command!",
+            description="Please specify the cf handle.",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+    if(teamName == "--"):
+        embed = discord.Embed(
+            title="Invalid command!",
+            description="Please specify the team name.",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    checkForStartTourney = thisServer['tournaments'][tourneyName]['tourney_status']
+
+    if checkForStartTourney == True:
+        embed = discord.Embed(
+            title="Tournament Already Started !",
+            description="Tounament has already started so nothing can be changed.",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    participantsListTemp = teamParticipantsList.find_one({"server": ctx.guild.id})
+    for x in participantsListTemp["contestants"][tourneyName]:
+        if x['id'] == ctx.author.id:
+            embed = discord.Embed(
+                title="Already Registered",
+                description=f"{ctx.author.mention} you are already registered, please wait till tournament"
+                            f" is started. If trying to change your"
+                            f"seed then first unregister yourself then again register.",
+                color=discord.Color.gold()
+            )
+            await text_channel.send(embed=embed)
+            return
+        elif x['id'] != ctx.author.id and x['cf_handle'] == cf_handle:
+            embed = discord.Embed(
+                title="Already Registered",
+                description=f"{ctx.author.mention} This handle has already been registered with some other user. Please register with another handle.",
+                color=discord.Color.gold()
+            )
+            await text_channel.send(embed=embed)
+            return
+        #check max 3 participants
+    maxR = 0;
+    uri = 'https://codeforces.com/api/user.info?handles=' + cf_handle
+    response_API = requests.get(uri)
+    data = response_API.text
+    parse_json = json.loads(data)
+    print(parse_json)
+    if(parse_json['status'] == 'FAILED'):
+        embed = discord.Embed(
+            title="Invalid cf handle!",
+            description="Please check your cf handle.",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    ## validate account
+    embed = discord.Embed(
+        title="Validate your account within 1 minute",
+        description=f"{ctx.author.mention}",
+        color=discord.Color.gold()
+    )
+    val_string = ''.join(random.choices(string.ascii_lowercase, k=10))
+    embed.add_field(name="Please change your first name to", value=val_string)
+    await text_channel.send(embed=embed)
+    
+    if not (validate_acc(cf_handle, val_string)):
+        embed = discord.Embed(
+            title="Validation failed!",
+            description=f"{ctx.author.mention}",
+            color=discord.Color.gold()
+        )
+        embed.add_field(name="Please try to register again", value=":-/")
+        await text_channel.send(embed=embed)
+        return
+
+    maxR = parse_json['result'][0]['maxRating']
+    avatar = parse_json['result'][0]['avatar']
+
+    contestants_ = teamParticipantsList.find_one({"server": ctx.guild.id})['contestants']
+    contestants_[tourneyName].append(
+        {"id": ctx.author.id, "teamName":teamName,"cf_handle": cf_handle.lower(), "maxRating": maxR, "avatar": avatar,"ac_handle":'--', "ac_maxR": '--'}
+    )
+    teamParticipantsList.update_one({"server": ctx.guild.id},
+                                {"$set": {"contestants": contestants_}})
+
+
+    embed = discord.Embed(
+        title="Registration successfull!",
+        description=f"{ctx.author.mention}",
+        color=discord.Color.gold()
+    )
+
+    embed.add_field(name="Cf_Handle", value=cf_handle, inline=True)
+    embed.add_field(name="Team_Name", value=teamName, inline=True)
+    embed.add_field(name="Max_Rating", value=maxR)
+    embed.set_footer(text = "If the above details are incorrect, unregister yourself and then register again.")
+    await text_channel.send(embed=embed)
+
+#Display the list of participants 
+@client.command()
+async def showTeamParticipants(ctx):
+    thisServer = servers.find_one({"_id": ctx.guild.id})
+    # global text_channel
+    for x in ctx.guild.text_channels:
+        if x.id == ctx.channel.id:
+            text_channel = x
+
+    global tourneyName
+    tourneyName = None
+    for tournament in thisServer['tournaments']:
+        if(thisServer['tournaments'][tournament]['text_channel'] == text_channel.id):
+            tourneyName = tournament
+
+    if(tourneyName == None):
+        embed = discord.Embed(
+            title="This channel is not registered for any tournament updates!",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    p_list=teamParticipantsList.find_one({"server":ctx.guild.id})['contestants'][tourneyName]
+
+    if(len(p_list) == 0):
+        embed = discord.Embed(
+            title="No participants registered yet!",
+            color=discord.Color.purple()
+        )
+        await text_channel.send(embed=embed)
+        return
+    teamList = {}
+    for i in range(len(p_list)):
+        try:
+            teamList[p_list[i]['teamName']].append(p_list[i])
+        except:
+            teamList[p_list[i]['teamName']] = [p_list[i]]
+    print(teamList)
+    embed=discord.Embed(title=f"Tournament : **{tourneyName}**",description=f"Total Teams : {len(teamList)}",color=discord.Color.purple())
+    for team in teamList:
+        embed.add_field(name="TeamName: "+team,value="",inline=False)
+        tags = ""
+        cfids = ""
+        maxratings = ""
+        acfids = ""
+        # teamfids = ""
+        for i in range(len(teamList[team])):
+            print(teamList[team][i])
+            tags += f"<@{str(teamList[team][i]['id'])}>" + "\n"
+            cfids += f"{teamList[team][i]['cf_handle']} ({teamList[team][i]['maxRating']})" + "\n"
+            acfids += f"{teamList[team][i]['ac_handle']}  ({teamList[team][i]['ac_maxR']})" + "\n"
+            # teamfids += f"{team[i]['teamName']}" + "\n"
+        embed.add_field(name=" Tag",value=tags,inline=True)
+        # embed.add_field(name="Team_Name",value=teamfids,inline=True)
+        embed.add_field(name="Codeforces",value=cfids,inline=True)
+        embed.add_field(name="Atcoder",value=acfids,inline=True)
+        # embed.add_field(name=" ",value=acfids+" \n",inline=True)
+    await text_channel.send(embed=embed)
+
 
 client.run(token)
