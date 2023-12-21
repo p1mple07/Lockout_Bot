@@ -1,23 +1,3 @@
-# import discord
-
-# intents = discord.Intents.all()
-# client = discord.Client(intents=intents)
-
-# @client.event
-# async def on_ready():
-#     print(f"We have logged in as {client.user}")
-
-# @client.event
-# async def on_message(message):
-#     if message.author == client.user:
-#         return
-
-#     if message.content.startswith("!z"):
-#         await message.channel.send("sher aa gaya")
-
-# client.run("MTE4MTI1Mzc4ODI5MjYzMjYxOA.G-cSFl.sKueghl9yPxT7iGTN2vAuOwY1KLy0GkQhDW1g4")
-
-
 import os
 import discord
 import time
@@ -37,7 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 
 uri = "uri"
-token = "token"
+token="token"
 
 try:
     cluster = MongoClient(uri)
@@ -2592,7 +2572,7 @@ async def startTeamRegister(ctx, text_channel: discord.TextChannel, tourneyName 
 
     embed = discord.Embed(
         title="Tournament Started :crossed_swords:",
-        description=f"Participants can register their cf account with **!registerMe <cf_handle>** and ac account with **!ac_registerMe <ac_handle>**",
+        description=f"Participants can register their teams and cf account with **!registerMeInTeam <cf_handle> <team_name> ** and ac account with **!ac_registerMe <ac_handle>**",
         color=discord.Color.gold()
     )
 
@@ -2659,7 +2639,10 @@ async def registerMeInTeam(ctx, cf_handle="--",teamName = "--"):
         return
 
     participantsListTemp = teamParticipantsList.find_one({"server": ctx.guild.id})
+    teamCount=0
     for x in participantsListTemp["contestants"][tourneyName]:
+        if(x['teamName']==teamName):
+            teamCount+=1
         if x['id'] == ctx.author.id:
             embed = discord.Embed(
                 title="Already Registered",
@@ -2678,7 +2661,14 @@ async def registerMeInTeam(ctx, cf_handle="--",teamName = "--"):
             )
             await text_channel.send(embed=embed)
             return
-        #check max 3 participants
+    if(teamCount==3):
+            embed = discord.Embed(
+                title="Team full",
+                description=f"3 users have already registered in {teamName}. Please register with another team name.",
+                color=discord.Color.gold()
+            )
+            await text_channel.send(embed=embed)
+            return        
     maxR = 0;
     uri = 'https://codeforces.com/api/user.info?handles=' + cf_handle
     response_API = requests.get(uri)
@@ -2797,5 +2787,150 @@ async def showTeamParticipants(ctx):
         # embed.add_field(name=" ",value=acfids+" \n",inline=True)
     await text_channel.send(embed=embed)
 
+
+@client.command()
+async def ac_registerMeInTeam(ctx, ac_handle="--"):
+    thisServer = servers.find_one({"_id": ctx.guild.id})
+    # global text_channel
+    for x in ctx.guild.text_channels:
+        if x.id == ctx.channel.id:
+            text_channel = x
+
+    global tourneyName
+    tourneyName = None
+    for tournament in thisServer['tournaments']:
+        if(thisServer['tournaments'][tournament]['text_channel'] == text_channel.id):
+            tourneyName = tournament
+
+    if tourneyName == None:
+        embed = discord.Embed(
+            title="No Tourney",
+            description=f"{ctx.author.mention} there is no ongoing tournament in this channel",
+            color=discord.Color.gold()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    checkForStartTourney = thisServer['tournaments'][tourneyName]['tourney_status']
+
+    if(ac_handle == "--"):
+        embed = discord.Embed(
+            title="Invalid command!",
+            description="Please specify the ac handle.",
+            color=discord.Color.gold()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    if checkForStartTourney == True:
+        embed = discord.Embed(
+            title="Tournament Already Started",
+            description="Tounament has already started so nothing can be changed.",
+            color=discord.Color.gold()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    flag = False
+    participantsListTemp = teamParticipantsList.find_one({"server": ctx.guild.id})
+    for x in participantsListTemp["contestants"][tourneyName]:
+        if x['id'] == ctx.author.id:
+            flag = True
+        if x['ac_handle'] == ac_handle:
+            embed = discord.Embed(
+                title="Already Registered",
+                description=f"{ctx.author.mention} This handle has already been registered by another person"
+                "Please register using another perviously unregistered handle!",
+                color=discord.Color.gold()
+            )
+            await text_channel.send(embed=embed)
+            return
+        if x['id'] == ctx.author.id and x['ac_handle'] != '--':
+            embed = discord.Embed(
+                title="Already Registered",
+                description=f"{ctx.author.mention} you are already registered, please wait till tournament"
+                            f" is started. If trying to change your"
+                            f"seed then first unregister yourself then again register.",
+                color=discord.Color.gold()
+            )
+            await text_channel.send(embed=embed)
+            return
+        
+    if not flag:
+        embed = discord.Embed(
+                title="Invalid Command",
+                description=f"{ctx.author.mention} Please register your cf_handle first and then register your "
+                "ac_handle!",
+                color=discord.Color.gold()
+            )
+        await text_channel.send(embed=embed)
+        return
+
+
+    maxR = 0
+    uri = 'https://atcoder.jp/users/' + ac_handle
+    response = requests.get(uri)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    Text = soup.body
+    main = Text.find("table",class_ = "dl-table mt-2")
+
+    if main == None:
+        embed = discord.Embed(
+            title="Invalid ac handle!",
+            description="Please check your ac handle.",
+            color=discord.Color.gold()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    ## validate account
+    embed = discord.Embed(
+        title="Validate your account within 1 minute",
+        description=f"{ctx.author.mention}",
+        color=discord.Color.gold()
+    )
+
+    val_string = ''.join(random.choices(string.ascii_lowercase, k=10))
+    embed.add_field(name="Please change your Affiliation", value=val_string)
+    await text_channel.send(embed=embed)
+    
+    if not (ac_validate_acc(ac_handle, val_string)):
+        embed = discord.Embed(
+            title="Validation failed!",
+            description=f"{ctx.author.mention}",
+            color=discord.Color.gold()
+        )
+        embed.add_field(name="Please try to register again")
+        await text_channel.send(embed=embed)
+        return
+
+    ind = main.text.index("Highest")
+    s = ''
+    for i in main.text[ind+len("Highest rating"):]:
+        if i == '―':
+            break
+        s += i
+    maxR = int(s)
+    contestants_ = teamParticipantsList.find_one({"server": ctx.guild.id})['contestants']
+    teamName="--"
+    for i in contestants_[tourneyName]:
+        if i["id"] == ctx.author.id:
+            i["ac_handle"] = ac_handle
+            i["ac_maxR"] = maxR
+            teamName=i['teamName']
+    teamParticipantsList.update_one({"server": ctx.guild.id},
+                                {"$set": {"contestants": contestants_}})
+
+
+    embed = discord.Embed(
+        title="Registration successfull!",
+        description=f"{ctx.author.mention}",
+        color=discord.Color.gold()
+    )
+    embed.add_field(name="Ac_Handle", value=ac_handle, inline=True)
+    embed.add_field(name="Team_Name", value=teamName, inline=True)
+    embed.add_field(name="Max_Rating", value=maxR)
+    embed.set_footer(text = "If the above details are incorrect, unregister yourself and then register again.")
+    await text_channel.send(embed=embed)
 
 client.run(token)
