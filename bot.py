@@ -17,7 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 
 uri = "uri"
-token="token"
+token = "token"
 
 try:
     cluster = MongoClient(uri)
@@ -83,6 +83,7 @@ async def help(ctx):
     embed.add_field(name="!registerMe <cf_handle>", value="To register your codeforces handles"+"\n\u200b", inline=False)
     embed.add_field(name="!registerMeInTeam <cf_handle> <Team_name>", value="To register your codeforces handles in team"+"\n\u200b", inline=False)
     embed.add_field(name="!ac_registerMe <ac_handle>", value="To register your atcoder handles"+"\n\u200b", inline=False)
+    embed.add_field(name="!ac_registerMeInTeam <ac_handle>", value="To register your atcoder handles in team"+"\n\u200b", inline=False)
     embed.add_field(name="!unregisterMe", value="To unregister yourself from the tournament"+"\n\u200b", inline=False)
     embed.add_field(name="!showParticipants", value="To display the participants"+"\n\u200b", inline=False)
     embed.add_field(name="!showTeamParticipants", value="To display the team participants"+"\n\u200b", inline=False)
@@ -134,7 +135,9 @@ async def managerHelp(ctx):
     embed.add_field(name="!matchChannel <channel name> <tourneyname>", value="To register a channel for match"+"\n\u200b", inline=False)
     embed.add_field(name="!unRegMatchChannel <channel name>", value="To unregister a channel for match"+"\n\u200b", inline=False)
     embed.add_field(name="!startTourney <tourneyname>", value="Start a tournament"+"\n\u200b", inline=False)
+    embed.add_field(name="!startTeamTourney <tourneyname>", value="Start a team tournament"+"\n\u200b", inline=False)
     embed.add_field(name="!stopTourney <tourneyname>", value="Stop a tournament"+"\n\u200b", inline=False)
+    embed.add_field(name="!stopTeamTourney <tourneyname>", value="Stop a team tournament"+"\n\u200b", inline=False)
     embed.add_field(name="!showTourneys", value="Shows the list of tournaments"+"\n\u200b", inline=False)
     embed.add_field(name="!startMatch <tag1> <tag2> <rating/toughness>", value=disp, inline=False)
 
@@ -2492,6 +2495,7 @@ async def get_user(ctx,handle = '--'):
         await ctx.send(embed = embed)
         return
     
+#team commands
 #Starts the registrations for a tournament
 @client.command()
 @commands.has_role('Tourney-manager')
@@ -2639,10 +2643,10 @@ async def registerMeInTeam(ctx, cf_handle="--",teamName = "--"):
         return
 
     participantsListTemp = teamParticipantsList.find_one({"server": ctx.guild.id})
-    teamCount=0
+    membersInTeamCount=0
     for x in participantsListTemp["contestants"][tourneyName]:
         if(x['teamName']==teamName):
-            teamCount+=1
+            membersInTeamCount+=1
         if x['id'] == ctx.author.id:
             embed = discord.Embed(
                 title="Already Registered",
@@ -2661,7 +2665,7 @@ async def registerMeInTeam(ctx, cf_handle="--",teamName = "--"):
             )
             await text_channel.send(embed=embed)
             return
-    if(teamCount==3):
+    if(membersInTeamCount==3):
             embed = discord.Embed(
                 title="Team full",
                 description=f"3 users have already registered in {teamName}. Please register with another team name.",
@@ -2932,5 +2936,343 @@ async def ac_registerMeInTeam(ctx, ac_handle="--"):
     embed.add_field(name="Max_Rating", value=maxR)
     embed.set_footer(text = "If the above details are incorrect, unregister yourself and then register again.")
     await text_channel.send(embed=embed)
+
+#Player match maker, matches the players based on different criteria
+def team_match_builder(ctx,tourneyName):
+    part_ = teamParticipantsList.find_one({"server": ctx.guild.id})['contestants'][tourneyName]
+    # participants = sorted(part_, key=lambda d: (-1)*d['maxRating'])
+    p_list=teamParticipantsList.find_one({"server":ctx.guild.id})['contestants'][tourneyName]
+    teamList = {}
+    for i in range(len(p_list)):
+        try:
+            teamList[p_list[i]['teamName']].append(p_list[i])
+        except:
+            teamList[p_list[i]['teamName']] = [p_list[i]]
+    team_count = len(teamList)
+    teamNames = list(teamList.keys())
+
+    var = int(math.log2(team_count))
+    temp = team_count - 2**var
+    lista = []
+    for j in range(2**var - temp):
+        lista.append([teamNames[j]])
+    for j in range(2**var - temp + 1, 2**var + 1):
+        if(j%2 == 0):
+            lista.append([[teamNames[team_count-j+2**var - temp],teamNames[j-1]]])
+        else:
+            lista.append([[teamNames[j-1],teamNames[team_count-j+2**var - temp]]])
+    while(len(lista) != 1):
+        templist = []
+        for j in range(int(len(lista)/2)):
+            templist.append(lista[j] + lista[-j - 1][::-1])
+        lista = templist
+    lista = lista[0]
+    # for i in lista:
+    #     if(len(i) == 2):
+    #         print(i[0]['cf_handle'],i[1]['cf_handle'])
+    #     else:
+    #         print(i['cf_handle'])
+    # temp = []
+    # for i in lista:
+    #     temp.append(teamList[i])
+    # lista = temp
+
+    matches_ = []
+    if(temp > 0):
+        
+        playersone = []
+        matchesone = []
+        for i in range(len(lista)):
+            if(len(lista[i]) == 2):
+                playersone.append(teamList[lista[i][0]])
+                playersone.append(teamList[lista[i][1]])
+                matchesone.append({"next_index": i})
+
+        for i in range(int(len(playersone)/2)):
+            matchesone[i]['player1'] = playersone[2*i]
+            matchesone[i]['player2'] = playersone[2*i + 1]
+            matchesone[i]['winner'] = None
+            matchesone[i]['status'] = False
+        
+        matches_.append({"players": playersone, "matches": matchesone})
+        print(matches_)
+
+        playersone = []
+        matchesone = []
+        for i in range(len(lista)):
+            if(len(lista[i]) == 2):
+                playersone.append("TBD")
+            else:
+                playersone.append(teamList[lista[i]])
+        
+        for i in range(int(len(playersone)/2)):
+            dic = {}
+            dic['player1'] = playersone[2*i]
+            dic['player2'] = playersone[2*i + 1]
+            dic['winner'] = None
+            dic['status'] = False
+            dic['next_index'] = i
+            matchesone.append(dic)
+        
+        matches_.append({"players": playersone, "matches": matchesone})
+
+        for i in range(1,var):
+            c = 2**(var - i)
+            playersone = []
+            matchesone = []
+            for j in range(c):
+                playersone.append("TBD")
+            for j in range(int(c/2)):
+                dic = {}
+                dic['player1'] = playersone[2*j]
+                dic['player2'] = playersone[2*j + 1]
+                dic['winner'] = None
+                dic['status'] = False
+                dic['next_index'] = i
+                matchesone.append(dic)
+            
+        matches_.append({"players": playersone, "matches": matchesone})
+
+
+
+    else:
+        matches_ = []
+
+        playersone = []
+        matchesone = []
+        for i in range(len(lista)):
+            playersone.append(teamList[lista[i]])
+
+        for i in range(int(len(lista)/2)):
+            dic = {}
+            dic['player1'] = playersone[2*i]
+            dic['player2'] = playersone[2*i + 1]
+            dic['winner'] = None
+            dic['status'] = False
+            dic['next_index'] = i
+            matchesone.append(dic)
+
+        matches_.append({"players": playersone, "matches": matchesone})
+
+        for i in range(1,var):
+            c = 2**(var - i)
+            playersone = []
+            matchesone = []
+            for j in range(c):
+                playersone.append("TBD")
+            for j in range(int(c/2)):
+                dic = {}
+                dic['player1'] = playersone[2*j]
+                dic['player2'] = playersone[2*j + 1]
+                dic['winner'] = None
+                dic['status'] = False
+                dic['next_index'] = i
+                matchesone.append(dic)
+            
+            matches_.append({"players": playersone, "matches": matchesone})
+
+    
+    storage_ = storage.find_one({"server": ctx.guild.id})['storage']
+
+    storage_[tourneyName] = matches_    
+    storage.update_one({"server": ctx.guild.id},{"$set":{"storage":storage_}})
+
+
+
+
+@client.command()
+@commands.has_role('Tourney-manager')
+async def startTeamTourney(ctx, tourneyName= "--"):
+
+    thisServer = servers.find_one({"_id": ctx.guild.id})
+    text_channel_n = thisServer["text_channel"]
+    global home_channel
+    for x in ctx.guild.text_channels:
+        if x.id == text_channel_n:
+            home_channel = x
+        
+    if(ctx.channel.id != text_channel_n):
+        embed = discord.Embed(
+            title="Tourney-manager not registered in this channel !",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+
+    if(tourneyName == "--"):
+        embed = discord.Embed(
+            title="Invalid command! :x:",
+            description="please specify tournament name",
+            color=discord.Color.red()
+        )
+        await home_channel.send(embed=embed)
+        return
+
+    tournaments = thisServer['tournaments']
+    global checkForStartTourney
+    flag = False
+    for i in tournaments:
+        if(i == tourneyName):
+            flag = True
+            checkForStartTourney = tournaments[tourneyName]['tourney_status']
+
+    if not flag:
+        embed = discord.Embed( 
+            title=f"Tournament {tourneyName} does not exist!",
+            color=discord.Color.red()
+        )
+        await home_channel.send(embed=embed)
+
+    if checkForStartTourney == True:
+        embed = discord.Embed( 
+            title="Tournament Already Started",
+            color=discord.Color.red()
+        )
+        embed.set_author(name=botName)
+        await home_channel.send(embed=embed)
+        return
+    p_list=teamParticipantsList.find_one({"server":ctx.guild.id})['contestants'][tourneyName]
+    teamList = {}
+    for i in range(len(p_list)):
+        try:
+            teamList[p_list[i]['teamName']].append(p_list[i])
+        except:
+            teamList[p_list[i]['teamName']] = [p_list[i]]
+    if len(teamParticipantsList.find_one({"server": ctx.guild.id})['contestants'][tourneyName]) == 0:
+        embed = discord.Embed(
+            title="No registrations",
+            description="No participants registered, cannot start the Tourney. Participants can register their cf accont using !registerMe <cf_handle> and ac accound using !ac_registerMe <ac_handle>",
+            color=discord.Color.red()
+        )
+        await home_channel.send(embed=embed)
+        return
+
+    if len(teamList) == 1:
+        embed = discord.Embed(
+            title="Single team registered",
+            description="Cannot start a tourney with a single team.",
+            color=discord.Color.red()
+        )
+        await home_channel.send(embed=embed)
+        return
+
+    text_channel_n2 = thisServer['tournaments'][tourneyName]['text_channel']
+    # global text_channel
+    for x in ctx.guild.text_channels:
+        if x.id == text_channel_n2:
+            text_channel = x
+
+    tournaments[tourneyName]['tourney_status'] = True
+    tournaments[tourneyName]['current_round'] = 1
+    
+    team_match_builder(ctx,tourneyName)
+
+    servers.update_one({"_id": ctx.guild.id},{
+                        "$set": {"tournaments": tournaments}})
+
+    embed = discord.Embed(
+        title=f"Tourney started :D",
+        description=f"The tourney {tourneyName} has started.",
+        color=discord.Color.green()
+    )
+    await text_channel.send(embed=embed)
+    await home_channel.send(embed=embed)
+
+@client.command()
+@commands.has_role('Tourney-manager')
+async def stopTeamTourney(ctx, tourneyName= "--"):
+
+    thisServer = servers.find_one({"_id": ctx.guild.id})
+    text_channel_n = thisServer["text_channel"]
+    global home_channel
+    for x in ctx.guild.text_channels:
+        if x.id == text_channel_n:
+            home_channel = x
+        
+    if(ctx.channel.id != text_channel_n):
+        embed = discord.Embed(
+            title="Tourney-manager not registered in this channel !",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+
+    if(tourneyName == "--"):
+        embed = discord.Embed(
+            title="Invalid command! :x:",
+            description="please specify tournament name",
+            color=discord.Color.red()
+        )
+        await home_channel.send(embed=embed)
+        return
+
+    tournaments = thisServer['tournaments']
+    flag = False
+    for i in tournaments:
+        if(i == tourneyName):
+            flag = True
+
+    if not flag:
+        embed = discord.Embed( 
+            title=f"Tournament {tourneyName} does not exist !",
+            color=discord.Color.red()
+        )
+        await home_channel.send(embed=embed)
+        return
+
+    text_channel_n2 = thisServer['tournaments'][tourneyName]['text_channel']
+    # global text_channel
+    for x in ctx.guild.text_channels:
+        if x.id == text_channel_n2:
+            text_channel = x
+
+    if thisServer['tournaments'][tourneyName]["current_round"] != "finished":
+        embed = discord.Embed(
+            title="Tourney stopped :(",
+            description=f"The tourney **{tourneyName}** has been stopped.",
+            color=discord.Color.red()
+        )
+
+    else:
+        round = storage.find_one({"server": ctx.guild.id})['storage'][tourneyName]
+        last_match = round[-1]["matches"]
+        part = teamParticipantsList.find_one({"server": ctx.guild.id})['contestants'][tourneyName]
+        var = None
+        avatar = None
+        for i in part:
+            if(i == last_match[0]["winner"]):
+                var = i["id"]
+                avatar = i["avatar"]
+        embed = discord.Embed(
+            title="Tournament finished :first_place:",
+            description=f"Congratulations! <@{var}> you have won the tournament GG",
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url = avatar)
+    
+    await text_channel.send(embed=embed)
+    embed2 = discord.Embed(
+        title=f"Tourney {tourneyName} stopped!",
+        color=discord.Color.dark_purple()
+    )
+    await home_channel.send(embed=embed2)
+
+
+    server_ = servers.find_one({"_id": ctx.guild.id})['tournaments']
+    del server_[tourneyName]
+    servers.update_one({"_id": ctx.guild.id}, {"$set": {"tournaments": server_}})
+
+    storage_ = storage.find_one({"server": ctx.guild.id})['storage']
+    del storage_[tourneyName]
+    storage.update_one({"server":ctx.guild.id},{"$set":{"storage": storage_}})
+
+    part_ = teamParticipantsList.find_one({"server": ctx.guild.id})['contestants']
+    del part_[tourneyName]
+    teamParticipantsList.update_one({"server":ctx.guild.id},{"$set":{"contestants": part_}})
+
+    current_ = current_matches.find_one({"server": ctx.guild.id})['matches']
+    del current_[tourneyName]
+    current_matches.update_one({"server": ctx.guild.id},{"$set":{"matches": current_}})
+
 
 client.run(token)
