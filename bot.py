@@ -16,8 +16,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 
-uri = "mongodb+srv://discordBot:shashwat@discord.s1a5cmt.mongodb.net/?retryWrites=true&w=majority"
-token = "MTE4MTI1Mzc4ODI5MjYzMjYxOA.GVENGi.ClONpQZDzdPL3E7LDAAwOAuC5Fv825vhfTRtAE"
+uri = "uri"
+token = "token"
 
 try:
     cluster = MongoClient(uri)
@@ -142,6 +142,7 @@ async def managerHelp(ctx):
     embed.add_field(name="!stopTeamTourney <tourneyname>", value="Stop a team tournament"+"\n\u200b", inline=False)
     embed.add_field(name="!showTourneys", value="Shows the list of tournaments"+"\n\u200b", inline=False)
     embed.add_field(name="!startMatch <tag1> <tag2> <rating/toughness>", value=disp, inline=False)
+    embed.add_field(name="!startTeamMatch <TeamName1> <TeamName2> <rating/toughness>", value=disp, inline=False)
 
     await ctx.send(embed=embed)
     return
@@ -3502,6 +3503,438 @@ async def teamRoundStatus(ctx,round = -1):
     await text_channel.send(embed=embed)
     return
     
+def TeamStatus(task,team1,team2,driver):
+    ans1 = ''
+    ans2 = ''
+    for i in team1:
+        user1 = i['ac_handle']
+        # link1 = f"{task[:-2]}/submissions?f.Task={task}&f.LanguageName=&f.Status=&f.User={user1}"
+        # msg1 = ac_problemset.search(link1)
+        # ans1 = ac_problemset.status(msg1)
+        ans1 = sing_status(task,user1,driver)
+        if ans1 != 'No_submissions':
+            break
+    for i in team2:
+        user2 = i['ac_handle']
+        ans2 = sing_status(task,user2,driver)
+        if ans2 != 'No_submissions':
+            break
+    # link2 = f"{task[:-2]}/submissions?f.Task={task}&f.LanguageName=&f.Status=&f.User={user2}"
+    # msg2 = ac_problemset.search(link2)
+    # ans2 = ac_problemset.status(msg2)
+    if ans1 == ans2 == 'No_submissions':
+        return False
+    else:
+        return True
 
+def ac_Team_probs(words,team1,team2,driver):
+    link = 'Error, Please try again!'
+    if words[0].lower() == 'beginner':
+        if words[1] in 'abcd':
+            num = random.randint(42,250)
+        else:
+            num = random.randint(130,250)
+        if 9<num<100:
+            num = '0'+str(num)
+        else:
+            num = str(num)
+        
+    
+        while TeamStatus('abc_'+num+words[1],team1,team2,driver):
+            if words[1] in 'abcd':
+                num = random.randint(42,250)
+            else:
+                num = random.randint(130,250)
+            if 9<num<100:
+                num = '0'+str(num)
+            else:
+                num = str(num)
+
+        link = 'abc'+str(num)+'/tasks/abc'+str(num)+'_'+words[1].lower()
+
+
+    elif words[0].lower() == 'regular':
+        num = random.randint(104,150) #starts from 58 but 58 to 103 only have abcd
+        if 9<num<100:
+            num = '0'+str(num)
+        else:
+            num = str(num)
+        while status('arc_'+num+words[1],user1,user2):
+            num = random.randint(104,150) #starts from 58 but 58 to 103 only have abcd
+            if 9<num<100:
+                num = '0'+str(num)
+            else:
+                num = str(num)
+
+        link = 'arc'+str(num)+'/tasks/arc'+str(num)+'_'+words[1].lower()
+    
+    elif words[0].lower() == 'grand':
+        num = random.randint(1,59)
+        if 0<num<10:
+            num  = '00'+str(num)
+        elif 9<num<100:
+            num = '0'+str(num)
+        else:
+            num = str(num)
+        while status('agc_'+num+words[1],user1,user2):
+            num = random.randint(1,59)
+            if 0<num<10:
+                num  = '00'+str(num)
+            elif 9<num<100:
+                num = '0'+str(num)
+            else:
+                num = str(num)
+        
+        link = 'agc'+str(num)+'/tasks/agc'+str(num)+'_'+words[1].lower()
+    
+    return link
+
+#Helps check if the players have solved a problem so that it is not given in the match
+def unsolved_Team_checker(contest_id, p_index, team):
+    if(len(p_index) > 1):
+        return False
+    problem_index = ord(p_index) - ord("A")
+    flag = True
+    for i in team:
+        handle = i['cf_handle']
+        uri = "https://codeforces.com/api/contest.standings?contestId="+str(contest_id)+"&from=1&count=5&showUnofficial=true&handles=" + handle
+        response_API = requests.get(uri)
+        data = response_API.text
+        parse_json = json.loads(data)['result']['rows']
+
+        if(len(parse_json) == 0):
+            continue
+            # return True
+        else:
+            points = parse_json[0]['problemResults'][problem_index]['points']
+            rejected_attempt = parse_json[0]['problemResults'][problem_index]['rejectedAttemptCount']
+
+
+            if(points > 0 or rejected_attempt > 0):
+                # return False
+                flag = False
+            # else:
+            #     return True
+    return flag
+
+
+#Start a match between two players
+#Only if they have a match in the current round
+
+@client.command()
+@commands.has_role('Tourney-manager')
+async def startTeamMatch(ctx, teamName1, teamName2, rting: str):
+    thisServer = servers.find_one({"_id": ctx.guild.id})
+    for x in ctx.guild.text_channels:
+        if x.id == ctx.channel.id:
+            text_channel = x
+
+    global tourneyName
+    tourneyName = None
+    for tournament in thisServer['tournaments']:
+        if(text_channel.id in thisServer['tournaments'][tournament]['match_channels']):
+            tourneyName = tournament
+
+    if(tourneyName == None):
+        embed = discord.Embed(
+            title="This channel is not registered for hosting any match!",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    cr = thisServer['tournaments'][tourneyName]['current_round']
+
+    if(cr == "finished"):
+        embed = discord.Embed(
+            title="The tournament is already over !",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+    
+
+    match_list=current_matches.find_one({"server":ctx.guild.id})['matches'][tourneyName]
+    dic={}
+
+    str1 = teamName1
+    str2 = teamName2
+    print(str1,str2)
+    # player1 = None
+    # player2 = None
+    team1 = None
+    team2 = None
+    # participants = teamParticipantsList.find_one({"server": ctx.guild.id})["contestants"][tourneyName]
+    p_list=teamParticipantsList.find_one({"server":ctx.guild.id})['contestants'][tourneyName]
+    teamList = {}
+    for i in range(len(p_list)):
+        try:
+            teamList[p_list[i]['teamName']].append(p_list[i])
+        except:
+            teamList[p_list[i]['teamName']] = [p_list[i]]
+
+    # for i in participants:
+    #     if(str1 == str(i["id"])):
+    #         player1 = i
+    #     if(str2 == str(i["id"])):
+    #         player2 = i
+    team1 = teamList[teamName1]
+    team2 = teamList[teamName2]
+        
+    dic.update({"team1": team1})
+    dic.update({"team2": team2})
+
+    if team1 == None or team2 == None:
+        embed = discord.Embed(
+            title="Unregistered Team!",
+            description="One or both of the above teams haven't even been registered for the tournament",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    if(teamName1==teamName2):
+        embed = discord.Embed(
+            title="Error!",
+            description="Both Teams can't be same",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    flag=False
+    ac_check = True
+    curr_round = servers.find_one({"_id": ctx.guild.id})['tournaments'][tourneyName]["current_round"]
+    current_round_matches=storage.find_one({"server": ctx.guild.id})["storage"][tourneyName][curr_round - 1]["matches"]
+
+    for match in current_round_matches:
+        if((team1==match["player1"] and team2==match["player2"]) or (team1==match["player2"] and team2==match["player1"])):
+            acteam1 = True
+            acteam2 = True
+            for i in team1:
+                if i["ac_handle"]=='--':
+                    acteam1 = False
+            for i in team2:
+                if i["ac_handle"]=='--':
+                    acteam2 = False
+                
+            if acteam1 == False or acteam2 == False:
+                ac_check = False
+            flag=True
+            break
+
+    if(flag==False):
+        embed = discord.Embed(
+            title="Error!",
+            description="Mentioned Players don't have a match in current round, check again",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    flag=False
+    xd = current_matches.find_one({"server":ctx.guild.id})["matches"][tourneyName]
+    newxd = []
+    for match in xd:
+        if((team1==match["player1"] and team2==match["player2"]) or (team1==match["player2"] and team2==match["player1"])):
+            flag=True
+            # print(1)
+        else:
+            newxd.append(match)
+            # print(2)
+
+    if(flag):
+        mat = current_matches.find_one({"server":ctx.guild.id})["matches"]
+        print(newxd)
+        # if(len(newxd) == 0):
+        #     mat[tourneyName] = []
+        # else:
+        #     mat[tourneyName] = newxd
+        del mat[tourneyName]
+        mat[tourneyName] = newxd
+        match_list = newxd
+        # mat.update({tourneyName: newxd})
+            
+        current_matches.update_one({"server":ctx.guild.id},{"$set":{"matches":mat}})
+        print(10)
+
+    if not ac_check and not(rting.isdigit()):
+        embed=discord.Embed(
+        title="Inavlid Command",
+        description=f"One or more players of either team do not have their ac_handle registered. Please have your contest on a codeforces problemset:) ",
+        color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    #set time for match
+    match_time = 0
+    embed=discord.Embed(
+        title="Please enter duration of match in minutes [10 - 180]:",
+        color=discord.Color.green()
+        )
+    await text_channel.send(embed=embed)
+
+    def check(msg):
+        return (msg.channel == text_channel and ctx.message.author == msg.author)
+
+    try:
+        reply_message = await client.wait_for('message', check=check, timeout=15)
+    except asyncio.TimeoutError:
+        await text_channel.send('You ran out of time to answer!')
+        return
+    else:
+        if reply_message.content.isnumeric():
+            mins = int(reply_message.content)
+            if not (mins>=2 and mins<=180):
+                await text_channel.send('Invalid duration. Please enter a number between 10 and 180.')
+                return
+            else:
+                match_time = mins
+        else:
+            await text_channel.send('Invalid format. Please enter a number next time.')
+            return
+
+    if rting.isdigit():
+        rating = int(rting)
+        tags=["implementation","dp","graphs","constructive algorithms","greedy","math","binary search","number theory","sortings"]
+        random.shuffle(tags)
+        url = f"https://codeforces.com/api/problemset.problems?{tags[0]}"
+        # url = f"https://codeforces.com/api/problemset.problems?implementation"
+
+        response_API = requests.get(url)
+        data = response_API.text
+        parse_json = json.loads(data)
+        if(parse_json['status'] != "OK"):
+            embed=discord.Embed(
+                title="CF API caused an error",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        problems = parse_json['result']['problems']
+
+        random.shuffle(problems)
+        problem_list = []
+        scores = [0,0]
+        pc = [0,0]
+        c = 0
+        for i in problems:  
+            if(i.get('rating') == rating and unsolved_Team_checker(i["contestId"], i["index"], team1) and unsolved_Team_checker(i["contestId"], i["index"], team2) ):
+                i['status']=0
+                problem_list.append(i)
+                rating += 100
+                c += 1
+            if(c == 5):
+                break
+        embed = discord.Embed(
+            title="Problem for this match",
+            description=f"{str1} : 0  vs {str2} : 0",
+            color=discord.Color.green()
+        )
+        index=1
+        value = ""
+        score = ""
+        for x in problem_list:
+            proburl = "https://codeforces.com/contest/" + str(x['contestId']) + "/problem/" + str(x['index'])
+            if(x['status'] == 0):
+                value += f"[{x['name']}]({proburl})" + "\n" 
+                score += str(index*100) + "\n"
+            else:
+                value += "this problem has been solved" + "\n" 
+                score += str(index*100) + "\n"
+            index=index+1
+        dic.update({"platform": "cf"})
+    else:
+        options = webdriver.ChromeOptions()
+        options.add_argument('--headless')  # Run Chrome in headless mode (no GUI)
+        driver = webdriver.Chrome(options=options)
+        # login_url = f"https://atcoder.jp/contests/{task[:-2]}/submissions?f.Task={task}&f.LanguageName=&f.Status=&f.User={user}"
+        # print(login_url)
+        login_url = "https://atcoder.jp/login"
+        driver.get(login_url)   
+
+        # Wait for the username field to be present
+        username_field = WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.ID, 'username'))
+        )
+        print("1")
+        # Wait for the password field to be present
+        password_field = WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.ID, 'password'))
+        )
+        print("2")
+        # Wait for the submit button to be present
+        submit_button = WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.ID, 'submit'))
+        )
+        print("3")
+        username_field.send_keys('LockoutBot_IITG')  # Replace 'YourUsername' with your actual username
+        password_field.send_keys('qwerty1234')  # Replace 'YourPassword' with your actual password
+        submit_button.click()
+        url = 'https://atcoder.jp/contests/'
+        diff = rting
+        x = 'beginner'
+        if diff.lower() == 'easy':
+            x = 'beginner'
+        elif diff.lower() == 'medium':
+            x = 'regular'
+        elif diff.lower() == 'hard':
+            x = 'grand'
+
+        problem_list = []
+        scores = [0,0]
+        pc = [0,0]
+
+        for i in 'abcde':
+            words = [x,i]
+            link = ac_Team_probs(words,team1,team2,driver)
+            problem_list.append([link,0])
+
+        embed = discord.Embed(
+            title="Problem for this match",
+            description=f"{str1} : 0  vs {str2} : 0",
+            color=discord.Color.green()
+        )
+
+        index=1
+        value = ""
+        score = ""
+        for x in problem_list:
+            if(x[1] == 0):
+                value += f"[Task {index}]({url+str(x[0])})"+"\n" 
+                score += str(index*100) + "\n";
+            else:
+                value += "this problem has been solved" + "\n" 
+                score += str(index*100) + "\n";
+            index=index+1
+        dic.update({"platform":"ac"})
+        
+    embed.add_field(name='Score', value = score, inline = True)
+    embed.add_field(name="Problem", value = value, inline=True)               
+    embed.set_footer(text=f"You have {match_time} minutes to solve the questions :)")
+    dic.update({"Problems":problem_list})
+    dic.update({"Scores":scores})
+    dic.update({"channel_id": ctx.channel.id})
+    dic.update({"status": "live"})
+    dic.update({"problem_rating": pc})
+    print(text_channel)
+    start_time=time.ctime()[11:19]
+    hours_start=int(start_time[0:2])
+    minutes_start=int(start_time[3:5])
+    seconds_start=int(start_time[6:8])
+    dic.update({"Start_Time":[hours_start,minutes_start,seconds_start]})
+    dic.update({"Match_duration":match_time})
+    match_list.append(dic)
+
+    curr_ = current_matches.find_one({"server": ctx.guild.id})['matches']
+    curr_[tourneyName] = match_list
+    current_matches.update_one({"server":ctx.guild.id},{"$set":{"matches":curr_}})
+    await ctx.send(embed=embed)
+
+    task1 = asyncio.create_task(matchLive(ctx,str1,str2,dic,url,match_time))
+    await task1  
+    
 
 client.run(token)
