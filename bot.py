@@ -16,8 +16,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 
-uri = "uri"
-token = "token"
+uri = "mongodb+srv://discordBot:shashwat@discord.s1a5cmt.mongodb.net/?retryWrites=true&w=majority"
+token = "MTE4MTI1Mzc4ODI5MjYzMjYxOA.GVENGi.ClONpQZDzdPL3E7LDAAwOAuC5Fv825vhfTRtAE"
 
 try:
     cluster = MongoClient(uri)
@@ -88,8 +88,10 @@ async def help(ctx):
     embed.add_field(name="!showParticipants", value="To display the participants"+"\n\u200b", inline=False)
     embed.add_field(name="!showTeamParticipants", value="To display the team participants"+"\n\u200b", inline=False)
     embed.add_field(name="!showMatches", value="Shows all the matches in the current round"+"\n\u200b", inline=False)
+    embed.add_field(name="!showTeamMatches", value="Shows all the team matches in the current round"+"\n\u200b", inline=False)
     embed.add_field(name="!show", value="Shows the current round number"+"\n\u200b", inline=False)
     embed.add_field(name="!roundStatus <roundnumber>", value="Shows the status of the current round"+"\n\u200b", inline=False)
+    embed.add_field(name="!teamRoundStatus <roundnumber>", value="Shows the status of the current round"+"\n\u200b", inline=False)
     embed.add_field(name="!matchUpdates", value="Gives you the updates of the ongoing match in a channel"+"\n\u200b", inline=False)
     embed.add_field(name="!stalk <tag>", value="Shows details of a particular participant"+"\n\u200b", inline=False)
     embed.add_field(name="!flow", value="Shows the workflow"+"\n\u200b", inline=False)
@@ -3273,6 +3275,233 @@ async def stopTeamTourney(ctx, tourneyName= "--"):
     current_ = current_matches.find_one({"server": ctx.guild.id})['matches']
     del current_[tourneyName]
     current_matches.update_one({"server": ctx.guild.id},{"$set":{"matches": current_}})
+
+#Displays the list of ongoing matches with their status
+@client.command()
+async def showTeamMatches(ctx):
+    thisServer = servers.find_one({"_id": ctx.guild.id})
+    # global text_channel
+    for x in ctx.guild.text_channels:
+        if x.id == ctx.channel.id:
+            text_channel = x
+
+    global tourneyName
+    tourneyName = None
+    for i in thisServer['tournaments']:
+        if(thisServer['tournaments'][i]['text_channel'] == text_channel.id or text_channel.id in thisServer['tournaments'][i]['match_channels']):
+            tourneyName = i
+
+    if(tourneyName == None):
+        embed = discord.Embed(
+            title="No ongoing tournament in this channel !",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    curr_round = thisServer['tournaments'][tourneyName]['current_round']
+
+    if(curr_round == None):
+        embed = discord.Embed(
+            title="Tournament has not started yet !",
+            color=discord.Color.purple()
+        )
+        await text_channel.send(embed=embed)
+        return
+    
+    if(curr_round == "finished"):
+        embed = discord.Embed(
+            title="All matches are finished !",
+            color=discord.Color.purple()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+
+    current_round_matches=storage.find_one({"server": ctx.guild.id})["storage"][tourneyName][curr_round - 1]["matches"]
+    current_matchlist = current_matches.find_one({"server": ctx.guild.id})["matches"][tourneyName]
+    
+
+    embed=discord.Embed(
+        title=f"Current Round : {curr_round} ",
+        color=discord.Color.purple()
+    )
+
+    sr = ""
+    match_players = ""
+    match_status = ""
+
+    count=1
+    for match in current_round_matches:
+        
+        player1 = match['player1']
+        player2 = match['player2']
+
+        match_players += f"{player1[0]['teamName']} vs {player2[0]['teamName']}" + "\n"
+
+        if(match["status"] == False):
+            match_={}
+            flag = False
+            for match in current_matchlist:
+                if((match['player1'] == player1 and match['player2'] == player2) or (match['player1'] == player2 and match['player2'] == player1)):
+                    flag=True
+                    match_=match
+                    break
+            if(flag):
+                 current_time=time.ctime()[11:19]
+                 hours=int(current_time[0:2])
+                 minutes=int(current_time[3:5])
+                 time_elapsed=(hours-match_["Start_Time"][0])*60+(minutes-match_["Start_Time"][1])
+                 match_status += f"{match['Match_duration'] - time_elapsed} mins left" + "\n"
+            else:
+                match_status += "pending" + "\n"
+
+            
+
+        elif(match["status"] == True):
+            match_status += f"{match['winner'][0]['teamName']}" + "\n"
+
+        sr += str(count) + "\n"
+        count+=1
+    
+    embed.add_field(name="Sr.", value=sr,inline=True)
+    embed.add_field(name="Match", value=match_players, inline=True)
+    embed.add_field(name="Status/Winner", value=match_status, inline=True)
+    await text_channel.send(embed=embed)
+    return
+
+#Shows all the matches in the current round (remaining, ongoing and finished)
+@client.command()
+async def teamRoundStatus(ctx,round = -1):
+    thisServer = servers.find_one({"_id": ctx.guild.id})
+    # global text_channel
+    for x in ctx.guild.text_channels:
+        if x.id == ctx.channel.id:
+            text_channel = x
+
+    global tourneyName
+    tourneyName = None
+    for i in thisServer['tournaments']:
+        if(thisServer['tournaments'][i]['text_channel'] == text_channel.id or text_channel.id in thisServer['tournaments'][i]['match_channels']):
+            tourneyName = i
+
+    if(tourneyName == None):
+        embed = discord.Embed(
+            title="No ongoing tournament in this channel !",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+    
+
+    if(round == -1):
+        embed = discord.Embed(
+            title="Invalid command!",
+            description="Please specify the round.",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+    
+    current_round = servers.find_one({"_id": ctx.guild.id})["tournaments"][tourneyName]['current_round']
+    
+    if(current_round == None):
+        embed = discord.Embed(
+            title="Tournament has not started yet !",
+            color=discord.Color.purple()
+        )
+        await text_channel.send(embed=embed)
+        return
+        
+    storage_ = storage.find_one({"server": ctx.guild.id})["storage"][tourneyName]
+    total_rounds = len(storage_)
+    
+    if(round > total_rounds):
+        embed = discord.Embed(
+            title="Invalid round number",
+            description="Given round exceeds total rounds in this tournament :/",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    elif(round <= 0):
+        embed = discord.Embed(
+            title="Invalid round number",
+            description="Round number should be greater than 0 :/",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+            
+    elif(current_round != "finished" and int(current_round) < round):
+        embed = discord.Embed(
+            title="Invalid round number",
+            description="Given round has not started yet :/",
+            color=discord.Color.red()
+        )
+        await text_channel.send(embed=embed)
+        return
+
+    
+    current_round_matches=storage.find_one({"server": ctx.guild.id})["storage"][tourneyName][round - 1]["matches"]
+    current_matchlist = current_matches.find_one({"server": ctx.guild.id})["matches"][tourneyName]
+
+    desc = None
+    if(current_round == round):
+        desc = "Active"
+    else:
+        desc = "Finished"
+
+    embed=discord.Embed(
+        title=f"Round : {round} ",
+        description=f"Status : {desc}",
+        color=discord.Color.purple()
+    )
+
+    sr = ""
+    match_players = ""
+    match_status = ""
+
+    count=1
+    for match in current_round_matches:
+        
+        player1 = match['player1']
+        player2 = match['player2']
+
+        match_players += f"{player1[0]['teamName']} vs {player2[0]['teamName']}" + "\n"
+
+        if(match["status"] == False):
+            match_={}
+            flag = False
+            for match in current_matchlist:
+                if((match['player1'] == player1 and match['player2'] == player2) or (match['player1'] == player2 and match['player2'] == player1)):
+                    flag=True
+                    match_=match
+                    break
+            if(flag):
+                 current_time=time.ctime()[11:19]
+                 hours=int(current_time[0:2])
+                 minutes=int(current_time[3:5])
+                 time_elapsed=(hours-match_["Start_Time"][0])*60+(minutes-match_["Start_Time"][1])
+                 match_status += f"{match['Match_duration'] - time_elapsed} mins left" + "\n"
+            else:
+                match_status += "pending" + "\n"
+
+            
+
+        elif(match["status"] == True):
+            match_status += f"{match['winner'][0]['teamName']}" + "\n"
+
+        sr += str(count) + "\n"
+        count+=1
+    
+    embed.add_field(name="Sr.", value=sr,inline=True)
+    embed.add_field(name="Match", value=match_players, inline=True)
+    embed.add_field(name="Status/Winner", value=match_status, inline=True)
+    await text_channel.send(embed=embed)
+    return
+    
 
 
 client.run(token)
