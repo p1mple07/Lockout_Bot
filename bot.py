@@ -81,28 +81,51 @@ async def help(ctx):
         color=0x3cddbc)
 
     embed.add_field(name="!registerMe <cf_handle>", value="To register your codeforces handles"+"\n\u200b", inline=False)
-    embed.add_field(name="!registerMeInTeam <cf_handle> <Team_name>", value="To register your codeforces handles in team"+"\n\u200b", inline=False)
+    # embed.add_field(name="!registerMeInTeam <cf_handle> <Team_name>", value="To register your codeforces handles in team"+"\n\u200b", inline=False)
     embed.add_field(name="!ac_registerMe <ac_handle>", value="To register your atcoder handles"+"\n\u200b", inline=False)
-    embed.add_field(name="!ac_registerMeInTeam <ac_handle>", value="To register your atcoder handles in team"+"\n\u200b", inline=False)
+    # embed.add_field(name="!ac_registerMeInTeam <ac_handle>", value="To register your atcoder handles in team"+"\n\u200b", inline=False)
     embed.add_field(name="!unregisterMe", value="To unregister yourself from the tournament"+"\n\u200b", inline=False)
-    embed.add_field(name="!unregisterMeFromTeam", value="To unregister yourself from the team tournament"+"\n\u200b", inline=False)
+    # embed.add_field(name="!unregisterMeFromTeam", value="To unregister yourself from the team tournament"+"\n\u200b", inline=False)
     embed.add_field(name="!showParticipants", value="To display the participants"+"\n\u200b", inline=False)
-    embed.add_field(name="!showTeamParticipants", value="To display the team participants"+"\n\u200b", inline=False)
+    # embed.add_field(name="!showTeamParticipants", value="To display the team participants"+"\n\u200b", inline=False)
     embed.add_field(name="!showMatches", value="Shows all the matches in the current round"+"\n\u200b", inline=False)
-    embed.add_field(name="!showTeamMatches", value="Shows all the team matches in the current round"+"\n\u200b", inline=False)
+    # embed.add_field(name="!showTeamMatches", value="Shows all the team matches in the current round"+"\n\u200b", inline=False)
     embed.add_field(name="!show", value="Shows the current round number"+"\n\u200b", inline=False)
     embed.add_field(name="!roundStatus <roundnumber>", value="Shows the status of the current round"+"\n\u200b", inline=False)
-    embed.add_field(name="!teamRoundStatus <roundnumber>", value="Shows the status of the current round"+"\n\u200b", inline=False)
+    # embed.add_field(name="!teamRoundStatus <roundnumber>", value="Shows the status of the current round"+"\n\u200b", inline=False)
     embed.add_field(name="!matchUpdates", value="Gives you the updates of the ongoing match in a channel"+"\n\u200b", inline=False)
-    embed.add_field(name="!teamMatchUpdates", value="Gives you the updates of the ongoing match in a channel"+"\n\u200b", inline=False)
+    # embed.add_field(name="!teamMatchUpdates", value="Gives you the updates of the ongoing match in a channel"+"\n\u200b", inline=False)
     embed.add_field(name="!stalk <tag>", value="Shows details of a particular participant"+"\n\u200b", inline=False)
     embed.add_field(name="!flow", value="Shows the workflow"+"\n\u200b", inline=False)
     embed.add_field(name="!managerHelp", value="Shows the commands for tourney-managers"+"\n\u200b", inline=False)
-    embed.add_field(name="!help", value="This message -_-", inline=False)
+    embed.add_field(name="!help", value="This message -_-"+"\n\u200b", inline=False)
+    embed.add_field(name="!teamHelp", value="Shows the team commands", inline=False)
     
 
     await ctx.send(embed=embed)
     return
+
+@client.command()
+async def teamHelp(ctx):
+    embed = discord.Embed(
+        title="COMMANDS :ledger:",
+        color=0x3cddbc)
+    embed.add_field(name="!registerMeInTeam <cf_handle> <Team_name>", value="To register your codeforces handles in team"+"\n\u200b", inline=False)
+    embed.add_field(name="!ac_registerMeInTeam <ac_handle>", value="To register your atcoder handles in team"+"\n\u200b", inline=False)
+    embed.add_field(name="!unregisterMeFromTeam", value="To unregister yourself from the team tournament"+"\n\u200b", inline=False)
+    embed.add_field(name="!showTeamParticipants", value="To display the team participants"+"\n\u200b", inline=False)
+    embed.add_field(name="!showTeamMatches", value="Shows all the team matches in the current round"+"\n\u200b", inline=False)
+    embed.add_field(name="!show", value="Shows the current round number"+"\n\u200b", inline=False)
+    embed.add_field(name="!teamRoundStatus <roundnumber>", value="Shows the status of the current round"+"\n\u200b", inline=False)
+    embed.add_field(name="!teamMatchUpdates", value="Gives you the updates of the ongoing match in a channel"+"\n\u200b", inline=False)
+    embed.add_field(name="!stalk <tag>", value="Shows details of a particular participant"+"\n\u200b", inline=False)
+    embed.add_field(name="!flow", value="Shows the workflow"+"\n\u200b", inline=False)
+    embed.add_field(name="!teamHelp", value="This message -_-", inline=False)
+    
+
+    await ctx.send(embed=embed)
+    return
+
 
 @client.command()
 async def flow(ctx):
@@ -1603,7 +1626,12 @@ async def startMatch(ctx, player_1, player_2, rting: str):
         else:
             await text_channel.send('Invalid format. Please enter a number next time.')
             return
-
+    embed=discord.Embed(
+        title="Fetching problems...",
+        color=discord.Color.green()
+        )
+    await text_channel.send(embed=embed)
+    
     if rting.isdigit():
         rating = int(rting)
         tags=["implementation","dp","graphs","constructive algorithms","greedy","math","binary search","number theory","sortings"]
@@ -2581,7 +2609,7 @@ async def startTeamRegister(ctx, text_channel: discord.TextChannel, tourneyName 
 
     embed = discord.Embed(
         title="Tournament Started :crossed_swords:",
-        description=f"Participants can register their teams and cf account with **!registerMeInTeam <cf_handle> <team_name> ** and ac account with **!ac_registerMe <ac_handle>**",
+        description=f"Participants can register their teams and cf account with **!registerMeInTeam <cf_handle> <team_name> ** and ac account with **!ac_registerMeInTeam <ac_handle>**",
         color=discord.Color.gold()
     )
 
@@ -3212,7 +3240,7 @@ async def startTeamTourney(ctx, tourneyName= "--"):
     if len(teamParticipantsList.find_one({"server": ctx.guild.id})['contestants'][tourneyName]) == 0:
         embed = discord.Embed(
             title="No registrations",
-            description="No participants registered, cannot start the Tourney. Participants can register their cf accont using !registerMe <cf_handle> and ac accound using !ac_registerMe <ac_handle>",
+            description="No participants registered, cannot start the Tourney. Participants can register their cf accont using !registerMeInTeam <cf_handle> <Team_Name> and ac accound using !ac_registerMeInTeam <ac_handle>",
             color=discord.Color.red()
         )
         await home_channel.send(embed=embed)
@@ -3579,8 +3607,21 @@ async def teamRoundStatus(ctx,round = -1):
     return
     
 def TeamStatus(task,team1,team2,driver):
+    contestType=task[:3]
+    contestId=task[4:len(task)-1]
+    prob=task[-1]
+    # link = 'abc'+str(task[4:])+'/tasks/abc'+str(num)+'_'+words[1].lower()
+    link = 'https://atcoder.jp/contests/'+contestType+str(contestId)+'/tasks/'+contestType+str(contestId)+'_'+prob.lower()
     ans1 = ''
     ans2 = ''
+    driver.get(link)  
+    print(link)
+    # ac_element = driver.find_element(By.XPATH, '//td[@class="text-center"]/span[@class="label label-success" and text()="AC"]')
+    # print('Found the element after login.')
+    # ac_text = ac_element.text
+    if '404' in driver.title:
+        return True
+
     for i in team1:
         user1 = i['ac_handle']
         # link1 = f"{task[:-2]}/submissions?f.Task={task}&f.LanguageName=&f.Status=&f.User={user1}"
@@ -4450,7 +4491,11 @@ async def startTeamMatch(ctx, teamName1, teamName2, rting: str):
         else:
             await text_channel.send('Invalid format. Please enter a number next time.')
             return
-
+    embed=discord.Embed(
+        title="Fetching problems...",
+        color=discord.Color.green()
+        )
+    await text_channel.send(embed=embed)
     if rting.isdigit():
         rating = int(rting)
         tags=["implementation","dp","graphs","constructive algorithms","greedy","math","binary search","number theory","sortings"]
