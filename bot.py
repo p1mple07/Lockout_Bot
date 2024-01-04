@@ -1009,6 +1009,26 @@ async def startTourney(ctx, tourneyName= "--"):
         return
 
     tournaments = thisServer['tournaments']
+    # # tournaments[tourneyName]['players'][0]
+    # if isinstance(tournaments[tourneyName][0]['players'][0], list):
+    #     embed = discord.Embed(
+    #         title="Invalid command! :x:",
+    #         description="please use startTeamTourney instead",
+    #         color=discord.Color.red()
+    #     )
+    #     await home_channel.send(embed=embed)
+    #     return
+    try:
+        p_list=participantsList.find_one({"server":ctx.guild.id})['contestants'][tourneyName]
+    except:
+        embed = discord.Embed(
+            title="Invalid command! :x:",
+            description="please use !startTeamTourney instead",
+            color=discord.Color.red()
+        )
+        await home_channel.send(embed=embed)
+        return
+
     global checkForStartTourney
     flag = False
     for i in tournaments:
@@ -1228,7 +1248,16 @@ async def stopTourney(ctx, tourneyName= "--"):
         )
         await home_channel.send(embed=embed)
         return
-
+    try:
+        p_list=participantsList.find_one({"server":ctx.guild.id})['contestants'][tourneyName]
+    except:
+        embed = discord.Embed(
+            title="Invalid command! :x:",
+            description="please use !stopTeamTourney instead",
+            color=discord.Color.red()
+        )
+        await home_channel.send(embed=embed)
+        return
     tournaments = thisServer['tournaments']
     flag = False
     for i in tournaments:
@@ -2528,7 +2557,7 @@ async def get_user(ctx,handle = '--'):
         await ctx.send(embed = embed)
         return
     
-#team commands
+########################################## TEAM COMMANDS ##################################
 #Starts the registrations for a tournament
 @client.command()
 @commands.has_role('Tourney-manager')
@@ -2701,7 +2730,7 @@ async def registerMeInTeam(ctx, cf_handle="--",teamName = "--"):
     if(membersInTeamCount==3):
             embed = discord.Embed(
                 title="Team full",
-                description=f"3 users have already registered in {teamName}. Please register with another team name.",
+                description=f"3 users have already registered in **{teamName}**. Please register with another team name.",
                 color=discord.Color.gold()
             )
             await text_channel.send(embed=embed)
@@ -3206,7 +3235,16 @@ async def startTeamTourney(ctx, tourneyName= "--"):
         )
         await home_channel.send(embed=embed)
         return
-
+    try:
+        p_list=teamParticipantsList.find_one({"server":ctx.guild.id})['contestants'][tourneyName]
+    except:
+        embed = discord.Embed(
+            title="Invalid command! :x:",
+            description="please use !startTourney instead",
+            color=discord.Color.red()
+        )
+        await home_channel.send(embed=embed)
+        return
     tournaments = thisServer['tournaments']
     global checkForStartTourney
     flag = False
@@ -3271,7 +3309,7 @@ async def startTeamTourney(ctx, tourneyName= "--"):
 
     embed = discord.Embed(
         title=f"Tourney started :D",
-        description=f"The tourney {tourneyName} has started.",
+        description=f"The tourney **{tourneyName}** has started.",
         color=discord.Color.green()
     )
     await text_channel.send(embed=embed)
@@ -3304,7 +3342,16 @@ async def stopTeamTourney(ctx, tourneyName= "--"):
         )
         await home_channel.send(embed=embed)
         return
-
+    try:
+        p_list=teamParticipantsList.find_one({"server":ctx.guild.id})['contestants'][tourneyName]
+    except:
+        embed = discord.Embed(
+            title="Invalid command! :x:",
+            description="please use !stopTourney instead",
+            color=discord.Color.red()
+        )
+        await home_channel.send(embed=embed)
+        return
     tournaments = thisServer['tournaments']
     flag = False
     for i in tournaments:
@@ -3313,7 +3360,7 @@ async def stopTeamTourney(ctx, tourneyName= "--"):
 
     if not flag:
         embed = discord.Embed( 
-            title=f"Tournament {tourneyName} does not exist !",
+            title=f"Tournament **{tourneyName}** does not exist !",
             color=discord.Color.red()
         )
         await home_channel.send(embed=embed)
@@ -3349,9 +3396,14 @@ async def stopTeamTourney(ctx, tourneyName= "--"):
             if(teamList[i] == last_match[0]["winner"]):
                 var = i
                 # avatar = i["avatar"]
+        
+        tags = ""
+        for i in teamList[var]:
+            tags += f"<@{str(i['id'])}>" + " "
+
         embed = discord.Embed(
             title="Tournament finished :first_place:",
-            description=f"Congratulations! **{var}** has won the tournament GG",
+            description=f"Congratulations! **{var}** has won the tournament GG\n{tags}", #check
             color=discord.Color.green()
         )
         # embed.set_thumbnail(url = avatar)
@@ -3841,6 +3893,15 @@ async def stopTeamMatch(ctx):
                 winner = team1
         else:
             temp.append(i)
+    p_list=teamParticipantsList.find_one({"server":ctx.guild.id})['contestants'][tourneyName]
+    teamList = {}
+    for i in range(len(p_list)):
+        try:
+            teamList[p_list[i]['teamName']].append(p_list[i])
+        except:
+            teamList[p_list[i]['teamName']] = [p_list[i]]
+
+    
 
     curr_ = current_matches.find_one({"server": ctx.guild.id})['matches']
     curr_[tourneyName] = temp
@@ -3853,11 +3914,15 @@ async def stopTeamMatch(ctx):
 
     embed = None
 
+    tags = ""
+    for i in teamList[winner[0]['teamName']]:
+        tags += f"<@{str(i['id'])}>" + " "
+
     if(curr_round == len(rounds)):
         
         embed = discord.Embed(
-            title="Congratulations ! :first_place:",
-            description=f"**{winner[0]['teamName']}** has won this round",
+            title="Congratulations! :first_place:",
+            description=f"**{winner[0]['teamName']}** has won this round\n{tags}", #check
             color=discord.Color.green()
         )
         await ctx.send(embed=embed)
@@ -3892,7 +3957,7 @@ async def stopTeamMatch(ctx):
     else:
         embed = discord.Embed(
             title="Congratulations ! :first_place: ",
-            description=f"**{winner[0]['teamName']}** has won this round",
+            description=f"**{winner[0]['teamName']}** has won this round\n{tags}",
             color=discord.Color.green()
         )
         await ctx.send(embed=embed)
@@ -3975,7 +4040,14 @@ async def TeamMatchLive(ctx, str1, str2, dic, url, match_time):
                 minutes_start = i["Start_Time"][1]
                 flag = True
                 break
-        
+        p_list=teamParticipantsList.find_one({"server":ctx.guild.id})['contestants'][tourneyName]
+        teamList = {}
+        for i in range(len(p_list)):
+            try:
+                teamList[p_list[i]['teamName']].append(p_list[i])
+            except:
+                teamList[p_list[i]['teamName']] = [p_list[i]]
+
         if(flag == False):
             break
 
@@ -4010,9 +4082,21 @@ async def TeamMatchLive(ctx, str1, str2, dic, url, match_time):
                             await text_channel.send(embed = embed)
                             embed = discord.Embed(
                                 title="There's an update in the standings !",
-                                description=f"**{str1}** : {score1}   **{str2}** : {score2}",
+                                # description=f"**{str1}** : {score1}   **{str2}** : {score2}",
                                 color=discord.Color.green()
                             )
+                            tags1 = ""
+                            for i in teamList[str1]:
+                                tags1 += f"<@{str(i['id'])}>" + "\n"
+                                
+                            tags2 = ""
+                            for i in teamList[str2]:
+                                tags2 += f"<@{str(i['id'])}>" + "\n"
+                                
+
+                            embed.add_field(name=f"{str1} : {score1}",value=tags1,inline=True)
+                            embed.add_field(name=f"{str2} : {score2}",value=tags2,inline=True)
+        
                             value = ""
                             score = ""
                             idx=1
@@ -4025,8 +4109,9 @@ async def TeamMatchLive(ctx, str1, str2, dic, url, match_time):
                                     value += "this problem has been solved" + "\n" 
                                     score += str(idx*100) + "\n";
                                 idx += 1
-                            embed.add_field(name='Score', value = score, inline = True)
+                            embed.add_field(name="", value ='', inline=True)
                             embed.add_field(name="Problem", value = value, inline=True)
+                            embed.add_field(name='Score', value = score, inline = True)
                             embed.set_footer(text=f"Remaining Time : {match_time-time_elapsed} minutes")                   
                             await text_channel.send(embed = embed)
                             continue
@@ -4052,9 +4137,20 @@ async def TeamMatchLive(ctx, str1, str2, dic, url, match_time):
                             await text_channel.send(embed = embed)
                             embed = discord.Embed(
                                 title="There's an update in the standings !",
-                                description=f"**{str1}** : {score1}   **{str2}** : {score2}",
+                                # description=f"**{str1}** : {score1}   **{str2}** : {score2}",
                                 color=discord.Color.green()
                             )
+                            tags1 = ""
+                            for i in teamList[str1]:
+                                tags1 += f"<@{str(i['id'])}>" + "\n"
+                                
+                            tags2 = ""
+                            for i in teamList[str2]:
+                                tags2 += f"<@{str(i['id'])}>" + "\n"
+                                
+
+                            embed.add_field(name=f"{str1} : {score1}",value=tags1,inline=True)
+                            embed.add_field(name=f"{str2} : {score2}",value=tags2,inline=True)
                             value = ""
                             score = ""
                             idx = 1
@@ -4067,8 +4163,9 @@ async def TeamMatchLive(ctx, str1, str2, dic, url, match_time):
                                     value += "this problem has been solved" + "\n" 
                                     score += str(idx*100) + "\n";
                                 idx += 1
-                            embed.add_field(name='Score', value = score, inline = True)
+                            embed.add_field(name="", value ='', inline=True)
                             embed.add_field(name="Problem", value = value, inline=True)
+                            embed.add_field(name='Score', value = score, inline = True)
                             embed.set_footer(text=f"Remaining Time : {match_time-time_elapsed} minutes")                   
                             await text_channel.send(embed = embed)
                             continue
@@ -4118,9 +4215,21 @@ async def TeamMatchLive(ctx, str1, str2, dic, url, match_time):
 
                         embed = discord.Embed(
                             title="There's an update in the standings !",
-                            description=f"**{str1}** : {score1}   **{str2}** : {score2}",
+                            # description=f"**{str1}** : {score1}   **{str2}** : {score2}",
                             color=discord.Color.green()
                         )
+                        tags1 = ""
+                        for i in teamList[str1]:
+                            tags1 += f"<@{str(i['id'])}>" + "\n"
+                            
+                        tags2 = ""
+                        for i in teamList[str2]:
+                            tags2 += f"<@{str(i['id'])}>" + "\n"
+                            
+
+                        embed.add_field(name=f"{str1} : {score1}",value=tags1,inline=True)
+                        embed.add_field(name=f"{str2} : {score2}",value=tags2,inline=True)
+        
                         value = ""
                         score = ""
 
@@ -4133,9 +4242,9 @@ async def TeamMatchLive(ctx, str1, str2, dic, url, match_time):
                                 value += "this problem has been solved" + "\n" 
                                 score += str(index*100) + "\n";
                             index+=1
-
-                        embed.add_field(name='Score', value = score, inline = True)
+                        embed.add_field(name='', value = '', inline = True)
                         embed.add_field(name="Problem", value = value, inline=True)
+                        embed.add_field(name='Score', value = score, inline = True)
                         embed.set_footer(text=f"Remaining Time : {match_time-time_elapsed} minutes")                   
                         await text_channel.send(embed = embed)
                         continue
@@ -4156,9 +4265,17 @@ async def TeamMatchLive(ctx, str1, str2, dic, url, match_time):
                         await text_channel.send(embed = embed)
                         embed = discord.Embed(
                             title="There's an update in the standings !",
-                            description=f"**{str1}** : {score1}   **{str2}** : {score2}",
+                            # description=f"**{str1}** : {score1}   **{str2}** : {score2}",
                             color=discord.Color.green()
                         )
+                        tags1 = ""
+                        for i in teamList[str1]:
+                            tags1 += f"<@{str(i['id'])}>" + "\n"
+                            
+                        tags2 = ""
+                        for i in teamList[str2]:
+                            tags2 += f"<@{str(i['id'])}>" + "\n"
+                            
                         value = ""
                         score = ""
                         index = 1
@@ -4170,8 +4287,9 @@ async def TeamMatchLive(ctx, str1, str2, dic, url, match_time):
                                 value += "this problem has been solved" + "\n" 
                                 score += str(index*100) + "\n";
                             index=index+1
-                        embed.add_field(name='Score', value = score, inline = True)
+                        embed.add_field(name='', value = '', inline = True)
                         embed.add_field(name="Problem", value = value, inline=True)
+                        embed.add_field(name='Score', value = score, inline = True)
                         embed.set_footer(text=f"Remaining Time : {match_time-time_elapsed} minutes")                   
                         await text_channel.send(embed = embed)
                         continue
@@ -4265,6 +4383,15 @@ async def teamMatchUpdates(ctx):
         
 
     matches = current_matches.find_one({"server": ctx.guild.id})["matches"][tourneyName]
+    
+    p_list=teamParticipantsList.find_one({"server":ctx.guild.id})['contestants'][tourneyName]
+
+    teamList = {}
+    for i in range(len(p_list)):
+        try:
+            teamList[p_list[i]['teamName']].append(p_list[i])
+        except:
+            teamList[p_list[i]['teamName']] = [p_list[i]]
 
     for match in matches:
         if(match["channel_id"] == text_channel.id):
@@ -4275,11 +4402,25 @@ async def teamMatchUpdates(ctx):
             score1,score2=match["Scores"][0],match["Scores"][1]
             id1,id2=match['team1'][0]['teamName'],match['team2'][0]['teamName']
             plt = match["platform"]
+
             embed=discord.Embed(
                 title="Match_Updates",
-                description=f"**{id1}** : {score1}   **{id2}** : {score2}",
+            #     description=f"**{id1}** : {score1}   **{id2}** : {score2}",
                 color=discord.Color.green()
             )
+            tags1 = ""
+            tags2 = ""
+            for i in teamList[id1]:
+                tags1 += f"<@{str(i['id'])}>" + "\n"
+            
+            for i in teamList[id2]:
+                tags2 += f"<@{str(i['id'])}>" + "\n"
+            
+
+            embed.add_field(name=f"**{id1}** : {score1}", value=tags1,inline=True)
+            embed.add_field(name=f"**{id2}** : {score2}", value=tags2,inline=True)
+            
+
             index=1
             value = ""
             score = ""
@@ -4303,9 +4444,9 @@ async def teamMatchUpdates(ctx):
                         value += "this problem has been solved" + "\n" 
                         score += str(index*100) + "\n";
                     index=index+1
-
-            embed.add_field(name='Score', value = score, inline = True)
+            embed.add_field(name='', value = '', inline = True)
             embed.add_field(name="Problem", value = value, inline=True)
+            embed.add_field(name='Score', value = score, inline = True)
             embed.set_footer(text=f"Remaining Time : {match['Match_duration']-time_elapsed} minutes")
             await text_channel.send(embed=embed)
             return
@@ -4532,9 +4673,22 @@ async def startTeamMatch(ctx, teamName1, teamName2, rting: str):
                 break
         embed = discord.Embed(
             title="Problem for this match",
-            description=f"{str1} : 0  vs {str2} : 0",
+            # description=f"{str1} : 0  vs {str2} : 0",
             color=discord.Color.green()
         )
+        tags1 = ""
+        for i in teamList[str1]:
+            tags1 += f"<@{str(i['id'])}>" + "\n"
+            
+        tags2 = ""
+        for i in teamList[str2]:
+            tags2 += f"<@{str(i['id'])}>" + "\n"
+            
+
+        embed.add_field(name=f"{str1} : 0",value=tags1,inline=True)
+        embed.add_field(name=f"{str2} : 0",value=tags2,inline=True)
+        
+       
         index=1
         value = ""
         score = ""
@@ -4596,9 +4750,22 @@ async def startTeamMatch(ctx, teamName1, teamName2, rting: str):
 
         embed = discord.Embed(
             title="Problem for this match",
-            description=f"{str1} : 0  vs {str2} : 0",
+            # description=f"{str1} : 0  vs {str2} : 0",
             color=discord.Color.green()
         )
+        tags1 = ""
+        for i in teamList[str1]:
+            tags1 += f"<@{str(i['id'])}>" + "\n"
+            
+        tags2 = ""
+        for i in teamList[str2]:
+            tags2 += f"<@{str(i['id'])}>" + "\n"
+            
+
+        embed.add_field(name=f"{str1} : 0",value=tags1,inline=True)
+        embed.add_field(name=f"{str2} : 0",value=tags2,inline=True)
+        
+       
 
         index=1
         value = ""
@@ -4612,9 +4779,9 @@ async def startTeamMatch(ctx, teamName1, teamName2, rting: str):
                 score += str(index*100) + "\n";
             index=index+1
         dic.update({"platform":"ac"})
-        
-    embed.add_field(name='Score', value = score, inline = True)
+    embed.add_field(name='', value = '', inline = True)
     embed.add_field(name="Problem", value = value, inline=True)               
+    embed.add_field(name='Score', value = score, inline = True)
     embed.set_footer(text=f"You have {match_time} minutes to solve the questions :)")
     dic.update({"Problems":problem_list})
     dic.update({"Scores":scores})
